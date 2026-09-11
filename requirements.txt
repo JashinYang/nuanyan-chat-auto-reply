@@ -1,0 +1,7 @@
+requests==2.34.2
+uiautomation==2.0.29
+pywin32==311
+pywebview==6.1
+windows-capture==2.0.1
+numpy==2.5.3
+
