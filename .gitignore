@@ -3,6 +3,7 @@ __pycache__/
 *.log
 .venv/
 .venv*/
+work-app-icon-preview.png
 build/
 dist/
 outputs/

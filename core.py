@@ -27,7 +27,7 @@ import win32process
 
 
 APP_NAME = "暖言聊天助手公开版"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 APP_DATA_DIR = Path.home() / "AppData" / "Roaming" / APP_NAME
 CONFIG_PATH = APP_DATA_DIR / "config.json"
 LOG_PATH = APP_DATA_DIR / "assistant.log"

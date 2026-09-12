@@ -1,24 +1,64 @@
-Parts of the message-bubble geometry classification and UI Automation approach were adapted from QQSafeChat:
-https://github.com/TheD0ubleC/QQSafeChat
+THIRD-PARTY NOTICES
+===================
 
-MIT License
+This distribution includes third-party software. Each component remains
+licensed by its respective copyright holder under its own terms. The project
+license does not replace, restrict, or extend those terms.
 
-Copyright (c) 2026 YiYi
+The authoritative component/version/license/source/bundling matrix is in
+THIRD_PARTY_COMPONENTS.md. Complete license and required notice texts shipped
+with the Windows distribution are in THIRD_PARTY_LICENSES/.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Material notices
+----------------
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Requests 2.34.2 is licensed under Apache-2.0 and ships a NOTICE file. The
+   Apache license and upstream NOTICE are reproduced in
+   THIRD_PARTY_LICENSES/requests/.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. UIAutomation 2.0.29 and OpenCV are licensed under Apache-2.0. No separate
+   upstream NOTICE file was present in the installed wheels. Their license
+   texts are reproduced in their respective directories.
+
+3. The opencv-python Windows wheel contains OpenCV, bundled third-party code,
+   and FFmpeg. FFmpeg is licensed under LGPL-2.1 as documented by the wheel's
+   LICENSE-3RD-PARTY.txt; that complete upstream file is included under
+   THIRD_PARTY_LICENSES/opencv-python/. The application does not modify FFmpeg
+   and dynamically uses the DLL shipped in the wheel. Source and relinking
+   information are available from the upstream URLs in the component matrix.
+
+4. certifi is licensed under MPL-2.0. Its unmodified certificate bundle and
+   license are included as a separate component; no certifi source file was
+   modified.
+
+5. PyInstaller is a build tool under GPL-2.0-or-later with the official
+   bootloader exception. The exception permits distributing the combined
+   executable under the application's license. PyInstaller itself is not
+   installed as an application feature; its bootloader and permissively
+   licensed runtime hooks are present in the frozen output. COPYING.txt is
+   included for transparency.
+
+6. Python 3.12 runtime files are distributed under the PSF License Version 2
+   and incorporated-software notices reproduced in
+   THIRD_PARTY_LICENSES/python/.
+
+7. pywebview includes Microsoft WebView2 loader and managed interop assemblies
+   version 1.0.2957.106. The corresponding Microsoft license from the official
+   NuGet package is included under THIRD_PARTY_LICENSES/webview2/. The WebView2
+   Runtime itself is a system prerequisite and is not bundled.
+
+8. Portions of the message-bubble geometry classification and UI Automation
+   approach were adapted from QQSafeChat:
+   https://github.com/TheD0ubleC/QQSafeChat
+   QQSafeChat is MIT licensed; its complete license is included under
+   THIRD_PARTY_LICENSES/qqsafechat/.
+
+Copyleft review
+---------------
+
+No GPL or AGPL application library was identified in the frozen runtime.
+PyInstaller's GPL is covered by its explicit bootloader exception. FFmpeg in
+the OpenCV wheel is LGPL-2.1, not GPL; its license and required notices are
+preserved. No Qt runtime was found in this Windows build. This is a technical
+license inventory, not legal advice; commercial distribution should be
+reviewed again by qualified counsel.

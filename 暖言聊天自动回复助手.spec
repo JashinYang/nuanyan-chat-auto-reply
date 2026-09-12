@@ -5,7 +5,15 @@ hiddenimports = []
 hiddenimports += collect_submodules('uiautomation')
 hiddenimports += collect_submodules('webview')
 hiddenimports += collect_submodules('windows_capture')
-datas = [('app.ico', '.')]
+datas = [
+    ('app.ico', '.'),
+    ('README.md', '.'),
+    ('LICENSE', '.'),
+    ('PRIVACY.md', '.'),
+    ('THIRD_PARTY_NOTICES.txt', '.'),
+    ('THIRD_PARTY_COMPONENTS.md', '.'),
+    ('THIRD_PARTY_LICENSES', 'THIRD_PARTY_LICENSES'),
+]
 datas += collect_data_files('uiautomation')
 
 
@@ -18,7 +26,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['PIL'],
     noarchive=False,
     optimize=0,
 )
