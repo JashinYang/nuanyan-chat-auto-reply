@@ -1,17 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 hiddenimports = []
 hiddenimports += collect_submodules('uiautomation')
 hiddenimports += collect_submodules('webview')
 hiddenimports += collect_submodules('windows_capture')
+datas = [('app.ico', '.')]
+datas += collect_data_files('uiautomation')
 
 
 a = Analysis(
     ['app.py'],
     pathex=[],
-    binaries=[('.venv312/Lib/site-packages/uiautomation/bin/UIAutomationClient_VC140_X64.dll', 'uiautomation/bin'), ('.venv312/Lib/site-packages/uiautomation/bin/UIAutomationClient_VC140_X86.dll', 'uiautomation/bin')],
-    datas=[('app.ico', '.')],
+    binaries=[],
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

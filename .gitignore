@@ -14,6 +14,7 @@ artifacts/
 *.pt
 *.pth
 *.onnx
+*-Windows-x64.zip
 .env
 .env.*
 config.json
@@ -22,4 +23,3 @@ assistant.log
 .vscode/
 .DS_Store
 Thumbs.db
-

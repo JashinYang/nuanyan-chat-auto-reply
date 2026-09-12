@@ -1,0 +1,41 @@
+name: Build Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+      - name: Test
+        run: |
+          python -m py_compile app.py core.py
+          python -m unittest discover -p "test_*.py"
+      - name: Build
+        run: pyinstaller --noconfirm --clean "暖言聊天自动回复助手.spec"
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path "dist/暖言聊天自动回复助手/*" -DestinationPath "暖言聊天自动回复助手-Windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuanyan-windows-x64
+          path: 暖言聊天自动回复助手-Windows-x64.zip
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: 暖言聊天自动回复助手-Windows-x64.zip
+          generate_release_notes: true
