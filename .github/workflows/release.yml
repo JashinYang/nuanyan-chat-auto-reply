@@ -40,13 +40,13 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart("v")
           $zip = "nuanyan-chat-auto-reply-v$version-Windows-x64.zip"
           $exeHash = (Get-FileHash "$releaseDir/暖言聊天自动回复助手.exe" -Algorithm SHA256).Hash
-          "$exeHash  暖言聊天自动回复助手.exe" | Set-Content "$releaseDir/SHA256SUMS.txt" -Encoding ascii
+          "$exeHash  暖言聊天自动回复助手.exe" | Set-Content "$releaseDir/SHA256SUMS.txt" -Encoding utf8
           Compress-Archive -Path "$releaseDir/*" -DestinationPath $zip
           $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash
           @(
             "$zipHash  $zip",
             "$exeHash  暖言聊天自动回复助手.exe"
-          ) | Set-Content SHA256SUMS.txt -Encoding ascii
+          ) | Set-Content SHA256SUMS.txt -Encoding utf8
       - uses: actions/upload-artifact@v4
         with:
           name: nuanyan-windows-x64
