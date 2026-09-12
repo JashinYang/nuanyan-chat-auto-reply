@@ -14,7 +14,7 @@
 
 ## 下载与校验
 
-下载 `暖言聊天自动回复助手-v0.1.0-Windows-x64.zip`，解压后运行其中的 EXE。SHA-256 校验值会同时作为发布附件提供。
+下载 `nuanyan-chat-auto-reply-v0.1.0-Windows-x64.zip`，解压后运行其中的 EXE。SHA-256 校验值会同时作为发布附件提供。
 
 ## 注意
 

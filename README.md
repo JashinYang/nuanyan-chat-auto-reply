@@ -24,7 +24,7 @@
 
 ## 下载运行
 
-不想配置 Python 的用户可前往 [Releases](https://github.com/JashinYang/nuanyan-chat-auto-reply/releases) 下载 Windows 便携版 ZIP，解压后运行 `暖言聊天自动回复助手.exe`。当前安装包尚未进行商业代码签名，Windows 首次运行时可能显示安全提醒；请核对发布页提供的 SHA-256 后再运行。
+不想配置 Python 的用户可前往 [Releases](https://github.com/JashinYang/nuanyan-chat-auto-reply/releases) 下载 `nuanyan-chat-auto-reply-v0.1.0-Windows-x64.zip`，解压后运行 `暖言聊天自动回复助手.exe`。当前安装包尚未进行商业代码签名，Windows 首次运行时可能显示安全提醒；请核对发布页提供的 SHA-256 后再运行。
 
 ## 从源码运行
 
