@@ -53,6 +53,14 @@ Material notices
    QQSafeChat is MIT licensed; its complete license is included under
    THIRD_PARTY_LICENSES/qqsafechat/.
 
+External services
+-----------------
+
+DeepSeek and TypeSafe are external API services, not bundled software
+components. Users provide their own credentials and remain responsible for
+the applicable service terms, charges, and submitted content. The project is
+not affiliated with or endorsed by either service.
+
 Copyleft review
 ---------------
 

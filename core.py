@@ -27,7 +27,7 @@ import win32process
 
 
 APP_NAME = "暖言聊天助手公开版"
-APP_VERSION = "0.1.1"
+APP_VERSION = "0.1.2-preview"
 APP_DATA_DIR = Path.home() / "AppData" / "Roaming" / APP_NAME
 CONFIG_PATH = APP_DATA_DIR / "config.json"
 LOG_PATH = APP_DATA_DIR / "assistant.log"
@@ -101,6 +101,7 @@ class Settings:
     base_url: str = "https://api.deepseek.com"
     model: str = "deepseek-v4-flash"
     api_key_protected: str = ""
+    typesafe_api_key_protected: str = ""
     relationship_notes: str = ""
     owner_gender: str = ""
     relationship_type: str = ""
@@ -259,6 +260,14 @@ class Settings:
         if platform is not None:
             return self._decrypt_api_key(protected)
         return self._decrypt_api_key(protected or self.api_key_protected)
+
+    def set_typesafe_api_key(self, api_key: str) -> None:
+        api_key = api_key.strip()
+        if api_key:
+            self.typesafe_api_key_protected = self._encrypt_api_key(api_key)
+
+    def get_typesafe_api_key(self) -> str:
+        return self._decrypt_api_key(self.typesafe_api_key_protected)
 
 
 @dataclass

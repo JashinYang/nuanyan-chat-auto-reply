@@ -6,6 +6,7 @@ import secrets
 import sys
 import threading
 import ctypes
+from dataclasses import asdict
 import win32api
 import win32con
 import win32gui
@@ -16,6 +17,7 @@ from socket import socket
 from urllib.parse import urlparse
 
 from core import APP_DATA_DIR, APP_VERSION, GENDER_TYPES, LOG_PATH, ONLINE_REPLY_ENDPOINT, ONLINE_REPLY_MODEL, RELATIONSHIP_TYPES, VISION_MODEL, AutoReplyWorker, LLMClient, LocalVisionClient, Settings, create_bridge, detect_risk, normalize_reply, start_emergency_hotkey
+from typesafe_preview import evaluate as evaluate_typesafe
 
 
 HOST = "127.0.0.1"
@@ -100,11 +102,47 @@ class ControlApp:
                     "min_delay_seconds": self.settings.min_delay_seconds,
                     "max_delay_seconds": self.settings.max_delay_seconds,
                     "has_api_key": bool(self.settings.get_api_key(self.settings.platform)),
+                    "has_typesafe_api_key": bool(
+                        self.settings.get_typesafe_api_key() or os.environ.get("TYPESAFE_API_KEY", "")
+                    ),
                 },
                 "running": running,
                 "status": self.status,
                 "logs": list(self.logs),
             }
+
+    def preview_typesafe(self, data: dict) -> dict:
+        running = bool(
+            self.worker and self.worker.thread and self.worker.thread.is_alive()
+            and not self.worker.stop_event.is_set()
+        )
+        if running:
+            raise RuntimeError("自动回复运行中，请先停止后再进行 TypeSafe 手动预览")
+        if data.get("consent") is not True:
+            raise ValueError("请先勾选同意发送本次手动输入的样例")
+        sample = data.get("sample")
+        if not isinstance(sample, str):
+            raise ValueError("请输入虚构或脱敏样例")
+        supplied_key = data.get("api_key")
+        if supplied_key is not None and not isinstance(supplied_key, str):
+            raise ValueError("TypeSafe API Key 格式无效")
+        supplied_key = (supplied_key or "").strip()
+        if supplied_key:
+            self.settings.set_typesafe_api_key(supplied_key)
+            self.settings.save()
+        api_key = (
+            supplied_key
+            or self.settings.get_typesafe_api_key()
+            or os.environ.get("TYPESAFE_API_KEY", "")
+        )
+        result = evaluate_typesafe(
+            sample,
+            risk_check=detect_risk,
+            enabled=True,
+            consent=True,
+            api_key=api_key,
+        )
+        return asdict(result)
 
     def update_settings(self, data: dict) -> None:
         if self.worker and self.worker.thread and self.worker.thread.is_alive() and not self.worker.stop_event.is_set():
@@ -327,7 +365,7 @@ APP = ControlApp()
 
 HTML = r'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>暖言聊天自动回复助手</title><style>
-:root{--bg:#fff8f7;--ink:#33272a;--muted:#806c70;--rose:#df5671;--rose2:#b83954;--line:#eedde0}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0,#ffe2e7,transparent 28%),var(--bg);color:var(--ink);font:15px/1.55 system-ui,"Microsoft YaHei",sans-serif}.wrap{max-width:940px;margin:auto;padding:30px 18px 60px}h1{font-size:35px;margin:6px 0 4px;letter-spacing:-1px}.sub{color:var(--muted);margin:0 0 20px}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.card{background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:0 14px 40px rgba(100,45,58,.07)}label{display:block;font-weight:700;margin:12px 0 5px}.hint{font-size:12px;color:var(--muted);font-weight:400}input,select,textarea{width:100%;border:1px solid #dbc8cc;border-radius:11px;padding:10px 11px;font:inherit;background:#fffdfd;color:var(--ink);outline:0}input:focus,select:focus,textarea:focus{border-color:var(--rose);box-shadow:0 0 0 3px #ffe4e9}input:read-only,textarea:read-only{background:#f3eeee;color:#76686b;border-color:#e2d7d9;cursor:not-allowed}textarea{height:85px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}button{border:1px solid #dbc8cc;background:white;color:var(--ink);border-radius:11px;padding:9px 13px;font-weight:700;cursor:pointer}button:hover{border-color:var(--rose)}button.primary{background:linear-gradient(135deg,var(--rose),var(--rose2));border:0;color:#fff}button.stop{color:#a32b42}button:disabled{opacity:.48;cursor:wait}.status{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:13px;margin-bottom:12px}.dot{width:10px;height:10px;border-radius:99px;background:#aaa;display:inline-block;margin-right:8px}.dot.on{background:#2ba875;box-shadow:0 0 0 5px #dcf5ea}.log{white-space:pre-wrap;background:#fffafa;border:1px solid var(--line);border-radius:12px;padding:12px;height:415px;overflow:auto;font:13px/1.6 ui-monospace,"Microsoft YaHei",monospace}.notice{font-size:13px;color:var(--muted);margin-top:13px;padding:10px;border-radius:10px;background:#fff7ec}.toast{position:fixed;right:18px;bottom:18px;padding:12px 16px;border-radius:12px;background:#302426;color:#fff;opacity:0;transform:translateY(12px);transition:.2s;pointer-events:none}.toast.show{opacity:1;transform:none}@media(max-width:760px){.grid{grid-template-columns:1fr}.log{height:260px}}
+:root{--bg:#fff8f7;--ink:#33272a;--muted:#806c70;--rose:#df5671;--rose2:#b83954;--line:#eedde0}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0,#ffe2e7,transparent 28%),var(--bg);color:var(--ink);font:15px/1.55 system-ui,"Microsoft YaHei",sans-serif}.wrap{max-width:940px;margin:auto;padding:30px 18px 60px}h1{font-size:35px;margin:6px 0 4px;letter-spacing:-1px}h2{margin:0 0 4px}.sub{color:var(--muted);margin:0 0 20px}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.card{background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:0 14px 40px rgba(100,45,58,.07)}.wide{grid-column:1/-1}label{display:block;font-weight:700;margin:12px 0 5px}.hint{font-size:12px;color:var(--muted);font-weight:400}input,select,textarea{width:100%;border:1px solid #dbc8cc;border-radius:11px;padding:10px 11px;font:inherit;background:#fffdfd;color:var(--ink);outline:0}input:focus,select:focus,textarea:focus{border-color:var(--rose);box-shadow:0 0 0 3px #ffe4e9}input:read-only,textarea:read-only{background:#f3eeee;color:#76686b;border-color:#e2d7d9;cursor:not-allowed}textarea{height:85px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}button{border:1px solid #dbc8cc;background:white;color:var(--ink);border-radius:11px;padding:9px 13px;font-weight:700;cursor:pointer}button:hover{border-color:var(--rose)}button.primary{background:linear-gradient(135deg,var(--rose),var(--rose2));border:0;color:#fff}button.stop{color:#a32b42}button:disabled{opacity:.48;cursor:wait}.status{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:13px;margin-bottom:12px}.dot{width:10px;height:10px;border-radius:99px;background:#aaa;display:inline-block;margin-right:8px}.dot.on{background:#2ba875;box-shadow:0 0 0 5px #dcf5ea}.log{white-space:pre-wrap;background:#fffafa;border:1px solid var(--line);border-radius:12px;padding:12px;height:415px;overflow:auto;font:13px/1.6 ui-monospace,"Microsoft YaHei",monospace}.notice{font-size:13px;color:var(--muted);margin-top:13px;padding:10px;border-radius:10px;background:#fff7ec}.preview-result{white-space:pre-wrap;background:#fffafa;border:1px solid var(--line);border-radius:12px;padding:12px;min-height:48px;margin-top:12px}.consent{display:flex;gap:9px;align-items:flex-start;font-weight:400}.consent input{width:auto;margin-top:5px}.toast{position:fixed;right:18px;bottom:18px;padding:12px 16px;border-radius:12px;background:#302426;color:#fff;opacity:0;transform:translateY(12px);transition:.2s;pointer-events:none}.toast.show{opacity:1;transform:none}@media(max-width:760px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.log{height:260px}}
 </style></head><body><div class="wrap"><h1>暖言聊天自动回复助手</h1><p class="sub">v__VERSION__ · QQ / 微信按选择运行 · 指定联系人精确锁定 · Ctrl+Alt+Q 紧急停止</p><div class="notice">本项目为独立第三方工具，不属于腾讯官方产品，与腾讯、QQ、微信不存在隶属、合作或认可关系。QQ、微信、WeChat 等名称仅用于描述兼容性，商标归相应权利人所有。请遵守平台规则；自动化可能导致功能限制或账号风控。</div><div class="grid"><section class="card">
 <label>聊天软件</label><select id="platform"><option value="qq">QQ</option><option value="wechat">微信（实验模式）</option></select>
 <label>你的性别 <span class="hint">必选，用于保持本人身份一致</span></label><select id="ownerGender"><option value="">请选择性别</option><option value="male">男性</option><option value="female">女性</option><option value="unspecified">其他或不愿说明</option></select>
@@ -341,7 +379,7 @@ HTML = r'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta n
 <div class="row"><div><label>静默缓冲（秒）</label><input id="minDelay" type="number" min="2" max="120"></div><div><label>最长缓冲（秒）</label><input id="maxDelay" type="number" min="2" max="120"></div></div>
 <label>关系背景 <span class="hint">可选，只用于调整语气</span></label><textarea id="notes"></textarea>
 <div class="buttons"><button id="saveSettings" onclick="save()">保存设置</button><button id="testAI" onclick="testAI()">测试 AI</button><button id="checkVision" onclick="checkVision()">检查视觉模型</button><button id="checkPlatform" onclick="checkSelectedPlatform()">检查 QQ</button><button class="primary" id="start" onclick="startBot()">启动 QQ 自动回复</button><button class="stop" id="stop" onclick="stopBot()">停止</button></div>
-<div class="notice" id="platformNotice">运行时请保持电脑版 QQ 登录，并让锁定联系人的聊天窗口处于打开状态。回复所需聊天文字会发送至 DeepSeek 在线 API；API Key 以 Windows DPAPI 加密保存在当前用户账户下。API 账号、费用、输入内容和服务条款由使用者负责。</div></section><section class="card"><div class="status"><b><span class="dot" id="dot"></span><span id="runLabel">未运行</span></b><span id="status">未运行</span></div><div class="notice">关闭此窗口只会隐藏到右下角托盘，自动回复会继续运行。只有点击“彻底退出程序”才会关闭后台。本程序不主动收集遥测。</div><div class="log" id="logs">暂无日志</div><div class="buttons"><button class="stop" onclick="exitApp()">彻底退出程序</button></div></section></div></div><div class="toast" id="toast"></div>
+<div class="notice" id="platformNotice">运行时请保持电脑版 QQ 登录，并让锁定联系人的聊天窗口处于打开状态。回复所需聊天文字会发送至 DeepSeek 在线 API；API Key 以 Windows DPAPI 加密保存在当前用户账户下。API 账号、费用、输入内容和服务条款由使用者负责。</div></section><section class="card"><div class="status"><b><span class="dot" id="dot"></span><span id="runLabel">未运行</span></b><span id="status">未运行</span></div><div class="notice">关闭此窗口只会隐藏到右下角托盘，自动回复会继续运行。只有点击“彻底退出程序”才会关闭后台。本程序不主动收集遥测。</div><div class="log" id="logs">暂无日志</div><div class="buttons"><button class="stop" onclick="exitApp()">彻底退出程序</button></div></section><section class="card wide"><h2>TypeSafe 手动判断预览</h2><div class="hint">实验功能：只分析你在这里手动输入的虚构或脱敏样例，给出“建议回复 / 无需回复 / 本人处理”。不会读取聊天窗口、生成回复或自动发送。</div><label>TypeSafe API Key <span class="hint" id="typesafeKeyHint">使用 Windows DPAPI 加密保存</span></label><input id="typesafeKey" type="password" placeholder="请输入独立的 TypeSafe API Key；留空保留已保存密钥"><label>虚构或脱敏样例 <span class="hint">1～2000 字，不要粘贴真实私密聊天</span></label><textarea id="typesafeSample" maxlength="2000" placeholder="例如：今天就聊到这里吧，不用回复这条消息了。"></textarea><label class="consent"><input id="typesafeConsent" type="checkbox"><span>我确认这是虚构或已脱敏样例，并同意本次将其发送给 TypeSafe；调用可能产生费用。</span></label><div class="buttons"><button id="testTypeSafe" onclick="testTypeSafe()">进行手动判断</button></div><div class="preview-result" id="typesafeResult">尚未进行判断</div></section></div></div><div class="toast" id="toast"></div>
 <script>
 const TOKEN='__TOKEN__',ONLINE_BASE='__ONLINE_REPLY_ENDPOINT__',ONLINE_MODEL='__ONLINE_REPLY_MODEL__';let initialized=false;let platformTargets={qq:'',wechat:''},platformRelationships={qq:'',wechat:''};let currentPlatform='qq',currentProvider='online';const defaultProfile=()=>({provider_mode:'online',online:{base_url:ONLINE_BASE,model:ONLINE_MODEL,has_api_key:false}});let modelProfiles={qq:defaultProfile(),wechat:defaultProfile()};const $=id=>document.getElementById(id);
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','X-App-Token':TOKEN},body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok)throw new Error(d.error||'操作失败');return d}
@@ -355,12 +393,13 @@ function values(){stashCurrent();const cfg=ensureProfile(currentPlatform)[curren
 function toast(s){$('toast').textContent=s;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
 async function save(silent=false){await api('/api/save',values());for(const p of Object.values(modelProfiles)){const cfg=p.online||{};if(cfg.api_key)cfg.has_api_key=true;delete cfg.api_key}$('key').value='';if(!silent)toast('QQ与微信在线模型设置已安全保存')}
 async function testAI(){await save(true);toast('正在测试 AI…');const d=await api('/api/test-ai',{});toast(d.message)}
+async function testTypeSafe(){const sample=$('typesafeSample').value.trim();if(!sample){toast('请输入虚构或脱敏样例');return}if(!$('typesafeConsent').checked){toast('请先勾选本次上传同意');return}const button=$('testTypeSafe');button.disabled=true;$('typesafeResult').textContent='正在判断…';try{const d=await api('/api/typesafe-preview',{sample,api_key:$('typesafeKey').value,consent:true});$('typesafeKey').value='';$('typesafeKeyHint').textContent='已保存加密密钥；留空即可保留';const labels={reply:'建议回复',no_reply:'无需回复',human:'本人处理',disabled:'未启用'};$('typesafeResult').textContent=(labels[d.action]||d.action)+'\n置信度：'+(d.confidence==null?'不可用':d.confidence.toFixed(2))+'\n'+d.reason+'\n自动发送：禁止'}finally{button.disabled=false}}
 async function checkVision(){toast('正在检查本机视觉模型…');const d=await api('/api/check-vision',{});toast(d.message)}
 async function checkSelectedPlatform(){await save(true);toast('正在检查 '+platformName()+'…');const d=await api('/api/check-platform',{});toast(d.message)}
 async function startBot(){if(!$('ownerGender').value){toast('请先选择你的性别');$('ownerGender').focus();return}if(!$('relationship').value){toast('请先选择你和对方是什么关系');$('relationship').focus();return}await save(true);await api('/api/start',{});toast(platformName()+'自动回复已启动');refresh()}
 async function stopBot(){await api('/api/stop',{});toast('已停止');refresh()}
 async function exitApp(){if(!confirm('彻底退出会停止所有自动回复，确定吗？'))return;await api('/api/exit',{});document.body.innerHTML='<div class="wrap"><h1>程序正在退出</h1></div>'}
-async function refresh(){try{const d=await api('/api/state');if(!initialized){platformTargets=d.settings.platform_targets||platformTargets;platformRelationships=d.settings.platform_relationships||platformRelationships;modelProfiles=d.settings.model_profiles||modelProfiles;$('platform').value=d.settings.platform||'qq';currentPlatform=$('platform').value;$('ownerGender').value=d.settings.owner_gender||'';$('wechatShortcut').value=d.settings.wechat_send_shortcut||'enter';$('minDelay').value=d.settings.min_delay_seconds;$('maxDelay').value=d.settings.max_delay_seconds;$('notes').value=d.settings.relationship_notes;syncPlatform(false);initialized=true}const locked=d.running;for(const id of ['platform','ownerGender','target','relationship','wechatShortcut','minDelay','maxDelay','notes','saveSettings','testAI','checkVision','checkPlatform'])$(id).disabled=locked;$('provider').disabled=true;$('base').readOnly=true;$('model').readOnly=true;$('key').disabled=locked;$('dot').className='dot'+(locked?' on':'');$('runLabel').textContent=locked?'运行中':'未运行';$('status').textContent=d.status;$('start').disabled=locked;$('stop').disabled=!locked;$('logs').textContent=d.logs.length?d.logs.join('\n\n'):'暂无日志';$('logs').scrollTop=$('logs').scrollHeight}catch(e){}}
+async function refresh(){try{const d=await api('/api/state');if(!initialized){platformTargets=d.settings.platform_targets||platformTargets;platformRelationships=d.settings.platform_relationships||platformRelationships;modelProfiles=d.settings.model_profiles||modelProfiles;$('platform').value=d.settings.platform||'qq';currentPlatform=$('platform').value;$('ownerGender').value=d.settings.owner_gender||'';$('wechatShortcut').value=d.settings.wechat_send_shortcut||'enter';$('minDelay').value=d.settings.min_delay_seconds;$('maxDelay').value=d.settings.max_delay_seconds;$('notes').value=d.settings.relationship_notes;$('typesafeKeyHint').textContent=d.settings.has_typesafe_api_key?'已保存加密密钥；留空即可保留':'使用 Windows DPAPI 加密保存';syncPlatform(false);initialized=true}const locked=d.running;for(const id of ['platform','ownerGender','target','relationship','wechatShortcut','minDelay','maxDelay','notes','saveSettings','testAI','checkVision','checkPlatform','typesafeKey','typesafeSample','typesafeConsent','testTypeSafe'])$(id).disabled=locked;$('provider').disabled=true;$('base').readOnly=true;$('model').readOnly=true;$('key').disabled=locked;$('dot').className='dot'+(locked?' on':'');$('runLabel').textContent=locked?'运行中':'未运行';$('status').textContent=d.status;$('start').disabled=locked;$('stop').disabled=!locked;$('logs').textContent=d.logs.length?d.logs.join('\n\n'):'暂无日志';$('logs').scrollTop=$('logs').scrollHeight}catch(e){}}
 $('platform').addEventListener('change',()=>syncPlatform(true));$('provider').addEventListener('change',()=>syncProvider(true));setInterval(refresh,1200);refresh();window.addEventListener('unhandledrejection',e=>toast(e.reason?.message||'操作失败'));
 </script></body></html>'''
 
@@ -419,6 +458,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/test-ai":
                 reply = LLMClient(APP.settings).test()
                 self._json({"ok": True, "message": reply})
+            elif path == "/api/typesafe-preview":
+                self._json(APP.preview_typesafe(data))
             elif path in {"/api/check-platform", "/api/check-qq"}:
                 import uiautomation as auto
                 with auto.UIAutomationInitializerInThread():
@@ -495,6 +536,10 @@ def packaged_self_test() -> None:
     assert not probe.get_api_key("qq")
     probe.set_api_key("packaged-test")
     assert probe.get_api_key() == "packaged-test"
+    assert not probe.get_typesafe_api_key()
+    probe.set_typesafe_api_key("packaged-typesafe-test")
+    assert probe.get_typesafe_api_key() == "packaged-typesafe-test"
+    assert "TypeSafe 手动判断预览" in HTML
 
 
 def main():
