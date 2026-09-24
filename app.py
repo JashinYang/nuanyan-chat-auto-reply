@@ -105,6 +105,7 @@ class ControlApp:
                     "has_typesafe_api_key": bool(
                         self.settings.get_typesafe_api_key() or os.environ.get("TYPESAFE_API_KEY", "")
                     ),
+                    "typesafe_auto_routing_enabled": self.settings.typesafe_auto_routing_enabled,
                 },
                 "running": running,
                 "status": self.status,
@@ -143,6 +144,45 @@ class ControlApp:
             api_key=api_key,
         )
         return asdict(result)
+
+    def update_typesafe_routing(self, data: dict) -> dict:
+        running = bool(
+            self.worker and self.worker.thread and self.worker.thread.is_alive()
+            and not self.worker.stop_event.is_set()
+        )
+        if running:
+            raise RuntimeError("自动回复运行中，请先停止后再修改 TypeSafe 设置")
+        enabled = data.get("enabled")
+        if type(enabled) is not bool:
+            raise ValueError("TypeSafe 自动分流开关无效")
+        if enabled is True and data.get("consent") is not True:
+            raise ValueError("启用前请确认聊天内容会发送给 TypeSafe，且可能产生费用")
+        supplied_key = data.get("api_key")
+        if supplied_key is not None and not isinstance(supplied_key, str):
+            raise ValueError("TypeSafe API Key 格式无效")
+        supplied_key = (supplied_key or "").strip()
+        api_key = (
+            supplied_key
+            or self.settings.get_typesafe_api_key()
+            or os.environ.get("TYPESAFE_API_KEY", "")
+        )
+        if enabled and not api_key.strip():
+            raise ValueError("启用 TypeSafe 自动分流前，请先填写 TypeSafe API Key")
+        previous_key = self.settings.typesafe_api_key_protected
+        previous_enabled = self.settings.typesafe_auto_routing_enabled
+        try:
+            if supplied_key:
+                self.settings.set_typesafe_api_key(supplied_key)
+            self.settings.typesafe_auto_routing_enabled = enabled
+            self.settings.save()
+        except Exception:
+            self.settings.typesafe_api_key_protected = previous_key
+            self.settings.typesafe_auto_routing_enabled = previous_enabled
+            raise
+        return {
+            "enabled": self.settings.typesafe_auto_routing_enabled,
+            "has_api_key": bool(api_key.strip()),
+        }
 
     def update_settings(self, data: dict) -> None:
         if self.worker and self.worker.thread and self.worker.thread.is_alive() and not self.worker.stop_event.is_set():
@@ -226,6 +266,10 @@ class ControlApp:
             raise RuntimeError("开始自动回复前，请先选择你和对方是什么关系")
         if self.settings.owner_gender not in GENDER_TYPES:
             raise RuntimeError("开始自动回复前，请先选择你的性别")
+        if self.settings.typesafe_auto_routing_enabled and not (
+            self.settings.get_typesafe_api_key() or os.environ.get("TYPESAFE_API_KEY", "")
+        ):
+            raise RuntimeError("TypeSafe 自动分流已启用，但未找到 TypeSafe API Key；请先在设置中保存密钥或关闭自动分流")
         self.worker = AutoReplyWorker(self.settings, self.log, self.set_status)
         self.worker.start()
         platform_name = "微信" if self.settings.platform == "wechat" else "QQ"
@@ -404,6 +448,39 @@ $('platform').addEventListener('change',()=>syncPlatform(true));$('provider').ad
 </script></body></html>'''
 
 
+def _install_typesafe_routing_controls(html: str) -> str:
+    replacements = (
+        (
+            '<input id="typesafeKey" type="password" placeholder="请输入独立的 TypeSafe API Key；留空保留已保存密钥">',
+            '<input id="typesafeKey" type="password" placeholder="请输入独立的 TypeSafe API Key；留空保留已保存密钥">'
+            '<label class="consent"><input id="typesafeAutoRouting" type="checkbox"><span>'
+            '启用在线自动分流：每批新消息及最近最多 4 条对话会发送给 TypeSafe；可能产生额外费用。'
+            'TypeSafe 仅给出“是否回复”和回复方向，之后仍由 DeepSeek 生成。默认关闭。</span></label>'
+            '<div class="buttons"><button id="saveTypeSafeSettings" onclick="saveTypeSafeSettings()">保存 TypeSafe 设置</button></div>',
+        ),
+        (
+            'async function testTypeSafe(){',
+            'async function saveTypeSafeSettings(){const enabled=$(\'typesafeAutoRouting\').checked;const button=$(\'saveTypeSafeSettings\');button.disabled=true;try{const d=await api(\'/api/typesafe-routing-settings\',{enabled,consent:enabled,api_key:$(\'typesafeKey\').value});$(\'typesafeKey\').value=\'\';$(\'typesafeKeyHint\').textContent=d.has_api_key?\'已保存加密密钥；留空即可保留\':\'尚未保存 TypeSafe API Key\';toast(d.enabled?\'TypeSafe 自动分流已启用；将发送受限聊天上下文\':\'TypeSafe 自动分流已关闭\')}catch(e){try{const state=await api(\'/api/state\');$(\'typesafeAutoRouting\').checked=state.settings.typesafe_auto_routing_enabled===true}catch(_){}throw e}finally{button.disabled=false}}async function testTypeSafe(){',
+        ),
+        (
+            "$('typesafeKeyHint').textContent=d.settings.has_typesafe_api_key?'已保存加密密钥；留空即可保留':'使用 Windows DPAPI 加密保存';syncPlatform(false)",
+            "$('typesafeKeyHint').textContent=d.settings.has_typesafe_api_key?'已保存加密密钥；留空即可保留':'使用 Windows DPAPI 加密保存';$('typesafeAutoRouting').checked=d.settings.typesafe_auto_routing_enabled===true;syncPlatform(false)",
+        ),
+        (
+            "'typesafeKey','typesafeSample','typesafeConsent','testTypeSafe'",
+            "'typesafeKey','typesafeSample','typesafeConsent','testTypeSafe','typesafeAutoRouting','saveTypeSafeSettings'",
+        ),
+    )
+    for old, new in replacements:
+        if html.count(old) != 1:
+            raise RuntimeError("TypeSafe controls could not be installed safely")
+        html = html.replace(old, new, 1)
+    return html
+
+
+HTML = _install_typesafe_routing_controls(HTML)
+
+
 class Handler(BaseHTTPRequestHandler):
     def _json(self, payload: dict, status: int = 200):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -460,6 +537,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "message": reply})
             elif path == "/api/typesafe-preview":
                 self._json(APP.preview_typesafe(data))
+            elif path == "/api/typesafe-routing-settings":
+                self._json(APP.update_typesafe_routing(data))
             elif path in {"/api/check-platform", "/api/check-qq"}:
                 import uiautomation as auto
                 with auto.UIAutomationInitializerInThread():
@@ -540,6 +619,8 @@ def packaged_self_test() -> None:
     probe.set_typesafe_api_key("packaged-typesafe-test")
     assert probe.get_typesafe_api_key() == "packaged-typesafe-test"
     assert "TypeSafe 手动判断预览" in HTML
+    assert not probe.typesafe_auto_routing_enabled
+    assert "typesafeAutoRouting" in HTML
 
 
 def main():

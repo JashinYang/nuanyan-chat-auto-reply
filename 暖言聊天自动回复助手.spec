@@ -8,6 +8,7 @@ hiddenimports += collect_submodules('windows_capture')
 datas = [
     ('app.ico', '.'),
     ('README.md', '.'),
+    ('TYPESAFE_PREVIEW.md', '.'),
     ('LICENSE', '.'),
     ('PRIVACY.md', '.'),
     ('THIRD_PARTY_NOTICES.txt', '.'),

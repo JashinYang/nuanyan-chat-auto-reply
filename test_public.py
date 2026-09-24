@@ -42,7 +42,7 @@ class PublicEditionTests(unittest.TestCase):
         self.assertIn("暖言聊天助手公开版", str(core.CONFIG_PATH))
 
     def test_release_compliance_files_exist(self):
-        for name in ("LICENSE", "PRIVACY.md", "THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_COMPONENTS.md"):
+        for name in ("LICENSE", "PRIVACY.md", "THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_COMPONENTS.md", "TYPESAFE_PREVIEW.md"):
             self.assertTrue(Path(name).is_file(), name)
         self.assertTrue(Path("THIRD_PARTY_LICENSES").is_dir())
 

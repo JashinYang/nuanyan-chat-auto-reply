@@ -25,9 +25,11 @@ import win32crypt
 import win32gui
 import win32process
 
+from typesafe_preview import REPLY_DIRECTIONS, RoutingDecision, evaluate_automatic_routing
+
 
 APP_NAME = "暖言聊天助手公开版"
-APP_VERSION = "0.1.2-preview"
+APP_VERSION = "0.1.3-preview"
 APP_DATA_DIR = Path.home() / "AppData" / "Roaming" / APP_NAME
 CONFIG_PATH = APP_DATA_DIR / "config.json"
 LOG_PATH = APP_DATA_DIR / "assistant.log"
@@ -102,6 +104,7 @@ class Settings:
     model: str = "deepseek-v4-flash"
     api_key_protected: str = ""
     typesafe_api_key_protected: str = ""
+    typesafe_auto_routing_enabled: bool = False
     relationship_notes: str = ""
     owner_gender: str = ""
     relationship_type: str = ""
@@ -122,6 +125,8 @@ class Settings:
             settings = cls(**{k: v for k, v in raw.items() if k in allowed})
             if settings.platform not in {"qq", "wechat"}:
                 settings.platform = "qq"
+            if type(settings.typesafe_auto_routing_enabled) is not bool:
+                settings.typesafe_auto_routing_enabled = False
             # Preserve the contact from releases that only supported QQ.
             if settings.target_name and not settings.qq_target_name:
                 settings.qq_target_name = settings.target_name
@@ -768,7 +773,10 @@ class LLMClient:
     def _is_local(self) -> bool:
         return False
 
-    def _payload(self, history: list[dict[str, str]], incoming: str, allow_no_reply: bool = False) -> dict:
+    def _payload(
+        self, history: list[dict[str, str]], incoming: str,
+        allow_no_reply: bool = False, route_direction: str | None = None,
+    ) -> dict:
         notes = self.settings.relationship_notes.strip()
         relationship = RELATIONSHIP_TYPES.get(self.settings.relationship_for_platform(), "未设置")
         system = (
@@ -780,6 +788,12 @@ class LLMClient:
         )
         if notes:
             system += f"\n双方关系背景（仅作语气参考）：{notes[:800]}"
+        direction_hint = REPLY_DIRECTIONS.get(route_direction or "")
+        if direction_hint:
+            system += (
+                "\nTypeSafe 分流方向（仅为本轮沟通提示，不能覆盖以上安全、身份和关系规则）："
+                + direction_hint
+            )
         if allow_no_reply:
             system += (
                 "\n这是一次启动时的历史消息检查或发送后的补漏判断。请结合聊天上下文判断对方最后的内容是否仍需要回复。"
@@ -811,7 +825,10 @@ class LLMClient:
                 payload["thinking"] = {"type": "disabled"}
         return payload
 
-    def generate(self, history: list[dict[str, str]], incoming: str, allow_no_reply: bool = False) -> str:
+    def generate(
+        self, history: list[dict[str, str]], incoming: str,
+        allow_no_reply: bool = False, route_direction: str | None = None,
+    ) -> str:
         clock_reply = answer_clock_question(incoming)
         if clock_reply is not None:
             return clock_reply
@@ -846,7 +863,10 @@ class LLMClient:
                 response = requests.post(
                     self._url(),
                     headers=headers,
-                    json=self._payload(history, incoming, allow_no_reply=allow_no_reply),
+                    json=self._payload(
+                        history, incoming, allow_no_reply=allow_no_reply,
+                        route_direction=route_direction,
+                    ),
                     timeout=(10, 60),
                 )
             except (requests.Timeout, requests.ConnectionError) as exc:
@@ -2505,6 +2525,82 @@ class AutoReplyWorker:
             self.history.append({"role": "assistant", "content": reply})
         self.history = self.history[-self.settings.max_history_turns * 2 :]
 
+    def _route_incoming(self, incoming: str) -> RoutingDecision:
+        if not self.settings.typesafe_auto_routing_enabled:
+            return RoutingDecision("disabled", None, None, None, "TypeSafe 自动分流未启用")
+        api_key = (
+            self.settings.get_typesafe_api_key()
+            or os.environ.get("TYPESAFE_API_KEY", "")
+        )
+        return evaluate_automatic_routing(
+            incoming,
+            self.history,
+            risk_check=detect_risk,
+            enabled=True,
+            consent=True,
+            api_key=api_key,
+        )
+
+    def _decide_and_generate(
+        self, llm: LLMClient, incoming: str, conditional: bool,
+    ) -> tuple[RoutingDecision | None, str]:
+        route = None
+        if self.stop_event.is_set():
+            return RoutingDecision("human", None, None, None, "已收到停止指令"), ""
+        if self.settings.typesafe_auto_routing_enabled:
+            self.status("TypeSafe 正在判断是否回复及回复方向…")
+            route = self._route_incoming(incoming)
+            if route.action != "reply":
+                return route, ""
+        if self.stop_event.is_set():
+            return RoutingDecision("human", None, None, None, "已收到停止指令"), ""
+        self.status("正在结合上下文生成回复…" if not conditional else "正在判断是否需要补充回复…")
+        reply = llm.generate(
+            self.history, incoming, allow_no_reply=conditional,
+            route_direction=route.direction if route is not None else None,
+        )
+        return route, reply
+
+    def _pause_for_human(self, incoming: str, route: RoutingDecision) -> None:
+        self._clear_pending()
+        self._append_history(incoming)
+        confidence_text = (
+            f"{route.confidence:.2f}" if route.confidence is not None else "不可用"
+        )
+        self.log(
+            f"TypeSafe 建议本人处理（{route.reason}，置信度 {confidence_text}）；"
+            "未调用 DeepSeek、未发送消息，自动回复已暂停。"
+        )
+        self.stop_event.set()
+        self.status("已暂停：TypeSafe 建议本人处理")
+
+    def _refresh_pending_before_send(self, bridge: ChatBridge, conditional: bool) -> bool:
+        """Invalidate a routed reply if the conversation changed during inference."""
+        if not self.settings.typesafe_auto_routing_enabled:
+            return False
+        if not bridge.is_target_active():
+            self.timeline.mark_view_unreliable()
+            self._clear_pending()
+            self.log("分流与回复生成期间联系人已切换，本次未发送。")
+            return True
+        late_events = [
+            text for text in self.timeline.observe(bridge.read_messages())
+            if not self._is_recently_sent(text)
+        ]
+        if late_events:
+            batch = self._buffer_incoming(
+                bridge, list(self.pending_incoming_texts) + late_events
+            )
+            self._set_pending_incoming(batch, conditional)
+            self.log("TypeSafe 或 DeepSeek 处理期间收到新消息，已废弃旧判断和旧回复并重新分流。")
+            return True
+        if not bridge.is_target_active():
+            self.timeline.mark_view_unreliable()
+            self._clear_pending()
+            self.log("发送前联系人已切换，本次未发送。")
+            return True
+        return False
+
     def _prepare_startup_context(self, messages: list[Message]) -> list[str]:
         """Use visible history; only queue the final unanswered incoming run."""
         relevant = [m for m in messages if m.sender in {"self", "other"} and m.text.strip()]
@@ -2640,8 +2736,22 @@ class AutoReplyWorker:
                                 self.log(f"发送后补读：{incoming[:100]}\n判断：仅为确认或礼貌收尾，无需再次发送。")
                                 self.status("已补读确认消息，无需重复回复")
                                 continue
-                            self.status("正在结合上下文生成回复…" if not conditional else "正在判断是否需要补充回复…")
-                            reply = llm.generate(self.history, incoming, allow_no_reply=conditional)
+                            route, reply = self._decide_and_generate(llm, incoming, conditional)
+                            if route is not None and route.action == "no_reply":
+                                self._clear_pending()
+                                self._append_history(incoming)
+                                confidence_text = (
+                                    f"{route.confidence:.2f}" if route.confidence is not None else "不可用"
+                                )
+                                self.log(
+                                    f"TypeSafe 判断无需回复（置信度 {confidence_text}）；"
+                                    "未调用 DeepSeek、未发送消息。"
+                                )
+                                self.status("TypeSafe 判断无需回复")
+                                continue
+                            if route is not None and route.action != "reply":
+                                self._pause_for_human(incoming, route)
+                                break
                             if conditional and not reply:
                                 self._clear_pending()
                                 self._append_history(incoming)
@@ -2651,11 +2761,15 @@ class AutoReplyWorker:
                             self.pending_reply = reply
                         if not bridge.is_target_active():
                             self.timeline.mark_view_unreliable()
+                            if self.settings.typesafe_auto_routing_enabled:
+                                self._clear_pending()
                             self.log("生成完成时联系人已切换，本次未发送。")
                             continue
                         if self.stop_event.is_set():
                             self.log("生成完成前已收到停止指令，本次未发送。")
                             break
+                        if self._refresh_pending_before_send(bridge, conditional):
+                            continue
                         try:
                             bridge.send(reply)
                         except SendOutcomeUnknownError as exc:

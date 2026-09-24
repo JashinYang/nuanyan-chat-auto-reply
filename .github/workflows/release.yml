@@ -32,7 +32,7 @@ jobs:
         shell: pwsh
         run: |
           $releaseDir = "dist/暖言聊天自动回复助手"
-          Copy-Item README.md,LICENSE,PRIVACY.md,THIRD_PARTY_NOTICES.txt,THIRD_PARTY_COMPONENTS.md -Destination $releaseDir
+          Copy-Item README.md,TYPESAFE_PREVIEW.md,LICENSE,PRIVACY.md,THIRD_PARTY_NOTICES.txt,THIRD_PARTY_COMPONENTS.md -Destination $releaseDir
           Copy-Item THIRD_PARTY_LICENSES -Destination $releaseDir -Recurse
           python tools/license_audit.py --release-dir $releaseDir
           & "$releaseDir/暖言聊天自动回复助手.exe" --self-test
