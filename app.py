@@ -451,12 +451,29 @@ $('platform').addEventListener('change',()=>syncPlatform(true));$('provider').ad
 def _install_typesafe_routing_controls(html: str) -> str:
     replacements = (
         (
+            '<h2>TypeSafe 手动判断预览</h2><div class="hint">实验功能：只分析你在这里手动输入的虚构或脱敏样例，给出“建议回复 / 无需回复 / 本人处理”。不会读取聊天窗口、生成回复或自动发送。</div>',
+            '<h2>智能回复判断</h2><div class="hint">启用后，启动自动回复即可由程序在后台判断“需要回复 / 无需回复 / 交给本人”，无需复制聊天或逐条操作。需要回复时由 DeepSeek 生成；判断不确定或服务异常时暂停自动回复，原因显示在运行状态和日志中。实验功能，由 TypeSafe 提供。</div>'
+            '<div class="preview-result" id="typesafeRoutingStatus" role="status">智能判断未开启</div>',
+        ),
+        (
+            '<label>虚构或脱敏样例',
+            '<details id="typesafeDebug"><summary>高级调试（可选，日常使用无需操作）</summary><div class="hint">TypeSafe 手动判断预览：仅测试虚构或脱敏样例，不读取聊天窗口、不生成或发送回复。测试同意不等于开启后台智能判断。</div><label>虚构或脱敏样例',
+        ),
+        (
+            '<div class="preview-result" id="typesafeResult">尚未进行判断</div></section>',
+            '<div class="preview-result" id="typesafeResult">尚未进行判断</div></details></section>',
+        ),
+        (
+            "const locked=d.running;",
+            "$('typesafeRoutingStatus').textContent=d.settings.typesafe_auto_routing_enabled?(d.running?'智能判断已开启 · 随自动回复在后台运行':'智能判断已开启 · 当前未运行；如有暂停，请查看运行状态和日志'):'智能判断未开启 · 使用原有回复流程';const locked=d.running;",
+        ),
+        (
             '<input id="typesafeKey" type="password" placeholder="请输入独立的 TypeSafe API Key；留空保留已保存密钥">',
             '<input id="typesafeKey" type="password" placeholder="请输入独立的 TypeSafe API Key；留空保留已保存密钥">'
             '<label class="consent"><input id="typesafeAutoRouting" type="checkbox"><span>'
-            '启用在线自动分流：每批新消息及最近最多 4 条对话会发送给 TypeSafe；可能产生额外费用。'
+            '启用后台智能判断：我同意每批新消息及最近最多 4 条对话发送给 TypeSafe；可能产生额外费用。'
             'TypeSafe 仅给出“是否回复”和回复方向，之后仍由 DeepSeek 生成。默认关闭。</span></label>'
-            '<div class="buttons"><button id="saveTypeSafeSettings" onclick="saveTypeSafeSettings()">保存 TypeSafe 设置</button></div>',
+            '<div class="buttons"><button id="saveTypeSafeSettings" onclick="saveTypeSafeSettings()">保存智能判断设置</button></div><div class="hint">首次配置并保存后即可使用；不需要操作下方高级调试。关闭时取消勾选并保存。保存设置不会启动自动回复。</div>',
         ),
         (
             'async function testTypeSafe(){',

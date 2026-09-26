@@ -6,6 +6,37 @@ import core
 
 
 class PublicEditionTests(unittest.TestCase):
+    def test_smart_routing_is_primary_and_debug_is_collapsed(self):
+        from html.parser import HTMLParser
+
+        class Controls(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.details = []
+                self.nodes = {}
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == "details":
+                    self.details.append(attrs.get("id"))
+                if "id" in attrs:
+                    self.nodes[attrs["id"]] = (attrs, list(self.details))
+
+            def handle_endtag(self, tag):
+                if tag == "details":
+                    self.details.pop()
+
+        page = Controls()
+        page.feed(app.HTML)
+        self.assertIn('<h2>智能回复判断</h2>', app.HTML)
+        self.assertNotIn("open", page.nodes["typesafeDebug"][0])
+        for control in ("typesafeSample", "typesafeConsent", "testTypeSafe", "typesafeResult"):
+            self.assertIn("typesafeDebug", page.nodes[control][1])
+        for control in ("typesafeKey", "typesafeAutoRouting", "saveTypeSafeSettings", "typesafeRoutingStatus"):
+            self.assertEqual([], page.nodes[control][1])
+        self.assertIn("可能产生额外费用", app.HTML)
+        self.assertFalse(core.Settings().typesafe_auto_routing_enabled)
+
     def test_reply_channel_is_online_and_locked(self):
         settings = core.Settings()
         channel = settings.model_channel("qq", "online")
