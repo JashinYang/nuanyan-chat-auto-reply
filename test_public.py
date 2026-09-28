@@ -47,7 +47,10 @@ class PublicEditionTests(unittest.TestCase):
             settings.model_channel("qq", "local")
 
     def test_public_page_has_no_local_reply_selector(self):
-        self.assertIn('value="online"', app.HTML)
+        self.assertIn('回复模型：DeepSeek（在线）', app.HTML)
+        for field_id in ("provider", "base", "model"):
+            self.assertNotIn(f'id="{field_id}"', app.HTML)
+        self.assertNotIn("系统锁定，只读", app.HTML)
         self.assertNotIn('value="local"', app.HTML)
         self.assertNotIn("无需 Key", app.HTML)
         self.assertIn("本项目为独立第三方工具", app.HTML)
